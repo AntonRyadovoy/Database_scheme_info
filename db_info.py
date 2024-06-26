@@ -1,35 +1,83 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import psycopg2
-from config import host, user, password, db_name
 
-
+   
 
 # Main window
 root = tk.Tk()
 root.geometry("1920x1080+400+150")
 root.resizable(width=True, height=True)
 root.title("DBKIS_Info")
-root["bg"] = '#9BC1BC'
+root.withdraw() 
 
 
-# Connecting PG
-try:
-    conn = psycopg2.connect(dbname=db_name, user=user, password=password, host=host)
-    cursor = conn.cursor()
-except Exception as e:
-    print(e)
-    root.destroy()
+def show_connection_window():
+    def connect():
+        global host, user, password, db_name,schema_entry
+        host = host_entry.get()
+        user = user_entry.get()
+        password = password_entry.get()
+        db_name = db_name_entry.get()
+        schema_entry = schema_name_entry.get()
+        try:
+            conn = psycopg2.connect(dbname=db_name, user=user, password=password, host=host)
+            conn.close()  
+            connection_window.destroy()
+            root.deiconify() 
+            fetch_data() 
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Не удалось подключиться к базе данных: {e}")
 
-# Query to get column names
-def get_column_names(cursor):
-    cursor.execute("""
+
+    connection_window = tk.Toplevel(root)
+    connection_window.title("Введите данные подключения")
+    connection_window.geometry("450x380+700+500")
+
+    connection_window.config (background= "#D8DEE9")
+
+    tk.Label(connection_window, text="Хост:", font=('Arial', 15, 'bold'), background= "#D8DEE9").pack()
+    host_entry = tk.Entry(connection_window, width=30, font=('Arial', 18), background="#ECEFF4")
+    host_entry.pack()
+    
+    tk.Label(connection_window, text="Имя пользователя:", font=('Arial', 15, 'bold'), background= "#D8DEE9").pack()
+    user_entry = tk.Entry(connection_window, width=30, font=('Arial', 18), background="#ECEFF4")  
+    user_entry.pack()
+    
+
+    tk.Label(connection_window, text="Пароль:", font=('Arial', 15, 'bold'), background= "#D8DEE9").pack()
+    password_entry = tk.Entry(connection_window, show="*", width=30, font=('Arial', 18), background="#ECEFF4") 
+    password_entry.pack()
+    
+
+    tk.Label(connection_window, text="Имя базы данных:", font=('Arial', 15, 'bold'), background= "#D8DEE9").pack()
+    db_name_entry = tk.Entry(connection_window, width=30, font=('Arial', 18), background="#ECEFF4") 
+    db_name_entry.pack()
+    
+
+    tk.Label(connection_window, text="Схема:", font=('Arial', 15, 'bold'), background="#D8DEE9").pack()
+    schema_name_entry = tk.Entry(connection_window, width=30, font=('Arial', 18), background="#ECEFF4")
+    schema_name_entry.pack()
+
+    connect_button = tk.Button(connection_window, text="Подключиться", font=('Arial', 20),background='#A3BE8C', command=connect)
+    connect_button.pack()
+
+show_connection_window()
+
+
+# Cursor
+def fetch_data():
+    global data
+    try:
+        conn = psycopg2.connect(dbname=db_name, user=user, password=password, host=host)
+        cursor = conn.cursor()
+        cursor.execute("""
         WITH QUERY AS (
             SELECT n.nspname AS schemaname, c.relname AS tablename, OBJ_DESCRIPTION(c.oid) AS description, c.reltuples 
             FROM pg_class c
             LEFT JOIN pg_namespace n ON n.oid = c.relnamespace
             LEFT JOIN pg_tablespace t ON t.oid = c.reltablespace
-            WHERE (c.relkind = 'r'::CHAR OR c.relkind = 'f'::CHAR) AND n.nspname = 'mm'
+            WHERE (c.relkind = 'r'::CHAR OR c.relkind = 'f'::CHAR) AND n.nspname =  %s
         )
         SELECT CONCAT_WS('          ', col.table_schema || '.' || col.table_name, query.description) AS table_name,
                col.column_name,
@@ -41,32 +89,47 @@ def get_column_names(cursor):
         LEFT JOIN pg_namespace ns ON ns.nspname = col.table_schema
         LEFT JOIN pg_class c ON col.table_name = c.relname AND c.relnamespace = ns.oid
         ORDER BY col.table_schema, col.table_name, col.ordinal_position;
-    """)
-    return [desc[0] for desc in cursor.description]
+    """, (schema_entry,)) 
+        data = cursor.fetchall()
+        display_data(data, tree)
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        messagebox.showerror("Ошибка", f"Ошибка при загрузке данных: {e}")
 
 # Fill treeview
-def fill_treeview(tree, data):
+def display_data(data, tree):
     tree.delete(*tree.get_children()) 
     for row in data:
         last = tree.insert('', 'end', text=row[0])
-        for i, col in enumerate(row[0:]):
-            tree.set(last, i, col)
+        for i, col in enumerate(row[1:]):
+            tree.set(last, i+1, col)
 
 
 def search_data():
+    global data
     search_text = search_entry.get().lower()
     filtered_data = [row for row in data if search_text in ' '.join(col for col in row if col is not None).lower()]
-    fill_treeview(tree, filtered_data)
+    display_data(filtered_data, tree)
 
 # Auto search
 def search_on_key_release(event):
     search_data()
 
 
-column_names = get_column_names(cursor)
+def display_data(data,tree):
+    tree.delete(*tree.get_children()) 
+    for row in data:
+        last = tree.insert('', 'end', text=row[0])
+        for i, col in enumerate(row[0:]):
+            tree.set(last, i, col)
+    pass
 
-#Style for columns and Treeview
 
+label_side = tk.Label(root, text="Рядовой А. А., 2024г.", bg="#D8DEE9")
+label_side.pack(side=tk.TOP, anchor=tk.E, padx=5, pady=5)
+
+#Styles
 style = ttk.Style(root)
 style.theme_use("clam") 
 
@@ -106,17 +169,13 @@ search_frame = tk.Frame(root)
 search_frame.pack(fill='x')
 search_entry = tk.Entry(search_frame, width=25, font=("Arial", 18),background="#A3BE8C")
 search_entry.pack(side='right', fill='x', expand=True)
-search_button = tk.Label(search_frame, text="Поиск >", width=25, height=2, background="#EBCB8B")
+search_button = tk.Label(search_frame, text="Поиск >>", width=25, height=2, background="#EBCB8B")
 search_button.pack(side='right')
 
 #Search entry 
-search_entry.bind("<KeyRelease>", search_on_key_release)
-
-
-data = cursor.fetchall()
-
-search_data()
+search_entry.bind("<KeyRelease>", lambda event: search_on_key_release(event))
 
 tree.pack(fill="both", expand=True)
+
 
 root.mainloop()
