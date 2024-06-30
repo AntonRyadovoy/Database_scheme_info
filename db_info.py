@@ -1,8 +1,20 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import psycopg2
+import os
+import sys
 
    
+   
+   
+file_path = os.path.abspath('connection_data.txt')
+
+host = None
+user = None
+password = None
+db_name = None
+data = None
+schema_entry = None
 
 # Main window
 root = tk.Tk()
@@ -10,6 +22,36 @@ root.geometry("1920x1080+400+150")
 root.resizable(width=True, height=True)
 root.title("DBKIS_Info")
 root.withdraw() 
+
+
+def save_connection_data(host, user, password, db_name, schema_name):
+    if getattr(sys, 'frozen', False):  
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(__file__)  
+
+    file_path = os.path.join(base_path, 'connection_data.txt')
+    with open(file_path, 'w') as file:
+        file.write(f"{host}\n{user}\n{password}\n{db_name}\n{schema_name}")
+
+
+def load_connection_data():
+    if getattr(sys, 'frozen', False):  
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(__file__) 
+
+    file_path = os.path.join(base_path, 'connection_data.txt')
+    try:
+        with open(file_path, 'r') as file:
+            host = file.readline().strip()
+            user = file.readline().strip()
+            password = file.readline().strip()
+            db_name = file.readline().strip()
+            schema_name = file.readline().strip()
+            return host, user, password, db_name, schema_name
+    except FileNotFoundError:
+        return None, None, None, None, None
 
 
 def show_connection_window():
@@ -20,6 +62,7 @@ def show_connection_window():
         password = password_entry.get()
         db_name = db_name_entry.get()
         schema_entry = schema_name_entry.get()
+        save_connection_data(host, user, password, db_name, schema_entry)
         try:
             conn = psycopg2.connect(dbname=db_name, user=user, password=password, host=host)
             conn.close()  
@@ -29,6 +72,7 @@ def show_connection_window():
         except Exception as e:
             messagebox.showerror("Ошибка", f"Не удалось подключиться к базе данных: {e}")
 
+    host, user, password, db_name, schema_entry = load_connection_data()
 
     connection_window = tk.Toplevel(root)
     connection_window.title("Введите данные подключения")
@@ -39,25 +83,26 @@ def show_connection_window():
     tk.Label(connection_window, text="Хост:", font=('Arial', 15, 'bold'), background= "#D8DEE9").pack()
     host_entry = tk.Entry(connection_window, width=30, font=('Arial', 18), background="#ECEFF4")
     host_entry.pack()
-    
+    host_entry.insert(0, host)
     tk.Label(connection_window, text="Имя пользователя:", font=('Arial', 15, 'bold'), background= "#D8DEE9").pack()
     user_entry = tk.Entry(connection_window, width=30, font=('Arial', 18), background="#ECEFF4")  
     user_entry.pack()
-    
+    user_entry.insert(0, user)
 
     tk.Label(connection_window, text="Пароль:", font=('Arial', 15, 'bold'), background= "#D8DEE9").pack()
     password_entry = tk.Entry(connection_window, show="*", width=30, font=('Arial', 18), background="#ECEFF4") 
     password_entry.pack()
-    
+    password_entry.insert(0, password)
 
     tk.Label(connection_window, text="Имя базы данных:", font=('Arial', 15, 'bold'), background= "#D8DEE9").pack()
     db_name_entry = tk.Entry(connection_window, width=30, font=('Arial', 18), background="#ECEFF4") 
     db_name_entry.pack()
-    
+    db_name_entry.insert(0, db_name)
 
     tk.Label(connection_window, text="Схема:", font=('Arial', 15, 'bold'), background="#D8DEE9").pack()
     schema_name_entry = tk.Entry(connection_window, width=30, font=('Arial', 18), background="#ECEFF4")
     schema_name_entry.pack()
+    schema_name_entry.insert(0, schema_entry)
 
     connect_button = tk.Button(connection_window, text="Подключиться", font=('Arial', 20),background='#A3BE8C', command=connect)
     connect_button.pack()
